@@ -24,7 +24,7 @@ def log_scale_melspectrogram(path, plot=False):
 
     if plot:
         melspect = melspect[np.newaxis, :]
-        misc.imshow(melspect.reshape((melspect.shape[2],melspect.shape[3])))
+        misc.imshow(melspect.reshape((melspect.shape[1],melspect.shape[2])))
         print(melspect.shape)
 
     return melspect
