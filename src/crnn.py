@@ -37,39 +37,43 @@ def batch_norm(x, n_out, phase_train, scope='bn'):
         normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, 1e-3)
     return normed
 
-def cnn(melspectrogram, weights, phase_train):
+def crnn(melspectrogram, weights, phase_train):
 
-    x = tf.reshape(melspectrogram,[-1,1,96,1366])
-    x = batch_norm(melspectrogram, 1366, phase_train)
-    x = tf.reshape(melspectrogram,[-1,96,1366,1])
+    x = tf.cast(tf.pad(melspectrogram,[[0,0],[0,0],[37,37],[0,0]],'CONSTANT'),tf.float32)
+    x = batch_norm(tf.reshape(x,[-1,1,96,1440]), 1440, phase_train)
+    x = tf.reshape(x,[-1,96,1440,1])
     conv2_1 = tf.add(tf.nn.conv2d(x, weights['wconv1'], strides=[1, 1, 1, 1], padding='SAME'), weights['bconv1'])
-    conv2_1 = tf.nn.relu(batch_norm(conv2_1, 32, phase_train))
-    mpool_1 = tf.nn.max_pool(conv2_1, ksize=[1, 2, 4, 1], strides=[1, 2, 4, 1], padding='VALID')
+    conv2_1 = tf.nn.relu(batch_norm(conv2_1, 64, phase_train))
+    mpool_1 = tf.nn.max_pool(conv2_1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
     dropout_1 = tf.nn.dropout(mpool_1, 0.5)
 
     conv2_2 = tf.add(tf.nn.conv2d(dropout_1, weights['wconv2'], strides=[1, 1, 1, 1], padding='SAME'), weights['bconv2'])
     conv2_2 = tf.nn.relu(batch_norm(conv2_2, 128, phase_train))
-    mpool_2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 4, 1], strides=[1, 2, 4, 1], padding='VALID')
+    mpool_2 = tf.nn.max_pool(conv2_2, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='VALID')
     dropout_2 = tf.nn.dropout(mpool_2, 0.5)
 
     conv2_3 = tf.add(tf.nn.conv2d(dropout_2, weights['wconv3'], strides=[1, 1, 1, 1], padding='SAME'), weights['bconv3'])
     conv2_3 = tf.nn.relu(batch_norm(conv2_3, 128, phase_train))
-    mpool_3 = tf.nn.max_pool(conv2_3, ksize=[1, 2, 4, 1], strides=[1, 2, 4, 1], padding='VALID')
+    mpool_3 = tf.nn.max_pool(conv2_3, ksize=[1, 4, 4, 1], strides=[1, 4, 4, 1], padding='VALID')
     dropout_3 = tf.nn.dropout(mpool_3, 0.5)
 
     conv2_4 = tf.add(tf.nn.conv2d(dropout_3, weights['wconv4'], strides=[1, 1, 1, 1], padding='SAME'), weights['bconv4'])
-    conv2_4 = tf.nn.relu(batch_norm(conv2_4, 192, phase_train))
-    mpool_4 = tf.nn.max_pool(conv2_4, ksize=[1, 3, 5, 1], strides=[1, 3, 5, 1], padding='VALID')
+    conv2_4 = tf.nn.relu(batch_norm(conv2_4, 128, phase_train))
+    mpool_4 = tf.nn.max_pool(conv2_4, ksize=[1, 4, 4, 1], strides=[1, 4, 4, 1], padding='VALID')
     dropout_4 = tf.nn.dropout(mpool_4, 0.5)
 
-    conv2_5 = tf.add(tf.nn.conv2d(dropout_4, weights['wconv5'], strides=[1, 1, 1, 1], padding='SAME'), weights['bconv5'])
-    conv2_5 = tf.nn.relu(batch_norm(conv2_5, 256, phase_train))
-    mpool_5 = tf.nn.max_pool(conv2_5, ksize=[1, 4, 4, 1], strides=[1, 4, 4, 1], padding='VALID')
-    dropout_5 = tf.nn.dropout(mpool_5, 0.5)
+    gru1_in = tf.reshape(dropout_4,[-1, 15, 128])
+    gru1 = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.GRUCell(32)] * 15)
+    gru1_out, state = tf.nn.dynamic_rnn (gru1, gru1_in, dtype=tf.float32, scope='gru1')
+    
+    gru2 = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.GRUCell(32)] * 15)
+    gru2_out, state = tf.nn.dynamic_rnn(gru2, gru1_out, dtype=tf.float32, scope='gru2')
+    gru2_out = tf.transpose(gru2_out, [1, 0, 2])
+    gru2_out = tf.gather(gru2_out, int(gru2_out.get_shape()[0]) - 1)
+    dropout_5 = tf.nn.dropout(gru2_out, 0.3)
 
     flat = tf.reshape(dropout_5, [-1, weights['woutput'].get_shape().as_list()[0]])
     p_y_X = tf.nn.sigmoid(tf.add(tf.matmul(flat,weights['woutput']),weights['boutput']))
-
     return p_y_X
 
 
@@ -93,19 +97,17 @@ if __name__ == '__main__':
 
     y_train = labels[train_indices]
     y_test = labels[test_indices]
-
+    
     weights = {
-        'wconv1':init_weights([3, 3, 1, 32]),
-        'wconv2':init_weights([3, 3, 32, 128]),
+        'wconv1':init_weights([3, 3, 1, 64]),
+        'wconv2':init_weights([3, 3, 64, 128]),
         'wconv3':init_weights([3, 3, 128, 128]),
-        'wconv4':init_weights([3, 3, 128, 192]),
-        'wconv5':init_weights([3, 3, 192, 256]),
-        'bconv1':init_biases([32]),
+        'wconv4':init_weights([3, 3, 128, 128]),
+        'bconv1':init_biases([64]),
         'bconv2':init_biases([128]),
         'bconv3':init_biases([128]),
-        'bconv4':init_biases([192]),
-        'bconv5':init_biases([256]),
-        'woutput':init_weights([256, 10]),
+        'bconv4':init_biases([128]),
+        'woutput':init_weights([32, 10]),
         'boutput':init_biases([10])}
 
     X = tf.placeholder("float", [None, 96, 1366, 1])
@@ -113,7 +115,7 @@ if __name__ == '__main__':
     lrate = tf.placeholder("float")
     phase_train = tf.placeholder(tf.bool, name='phase_train')
 
-    y_ = cnn(X, weights, phase_train)
+    y_ = crnn(X, weights, phase_train)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, y))
     train_op = tf.train.RMSPropOptimizer(learning_rate, 0.9).minimize(cost)
@@ -142,5 +144,4 @@ if __name__ == '__main__':
                                phase_train:True}
             predictions = sess.run(predict_op, feed_dict=test_input_dict)
             print('Epoch : ', i,  'AUC : ', sm.roc_auc_score(y_test[test_indices], predictions, average='samples'))
-            # print(i, np.mean(np.argmax(y_test[test_indices], axis=1) == predictions))
-            # print sort_result(tags, predictions)[:5]
+            # print sort_result(tags, predictions)[:5])
