@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import librosa as lb
 
@@ -20,9 +21,13 @@ def log_scale_melspectrogram(path, plot=False):
         signal = signal[(n_sample-n_sample_fit)/2:(n_sample+n_sample_fit)/2]
 
     melspect = lb.logamplitude(lb.feature.melspectrogram(y=signal, sr=Fs, hop_length=N_OVERLAP, n_fft=N_FFT, n_mels=N_MELS)**2, ref_power=1.0)
-    melspect = melspect[np.newaxis, np.newaxis, :]
-    
+
     if plot:
+        melspect = melspect[np.newaxis, :]
         misc.imshow(melspect.reshape((melspect.shape[2],melspect.shape[3])))
+        print(melspect.shape)
 
     return melspect
+
+if __name__ == '__main__':
+    log_scale_melspectrogram(sys.argv[1],True)
