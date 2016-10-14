@@ -7,8 +7,8 @@ import read_data as rd
 
 batch_size    = 4
 learning_rate = 0.003
-n_epoch       = 5
-n_samples     = 10                              # change to 1000 for entire dataset
+n_epoch       = 50
+n_samples     = 1000                              # change to 1000 for entire dataset
 cv_split      = 0.8                             
 train_size    = int(n_samples * cv_split)                               
 test_size     = n_samples - train_size
@@ -84,17 +84,14 @@ def sort_result(tags, preds):
 
 if __name__ == '__main__':
 
-    labels = rd.get_labels()
-    spectrograms = rd.get_melspectrograms()
-
     indices = np.arange(n_samples)
     np.random.shuffle(indices)
     train_indices = indices[0:train_size]
     test_indices  = indices[train_size:]
 
-    X_train = spectrograms[train_indices]
-    X_test = spectrograms[test_indices]
+    labels = rd.get_labels()
 
+    X_test = rd.get_melspectrograms_indexed(test_indices)
     y_train = labels[train_indices]
     y_test = labels[test_indices]
     
@@ -126,10 +123,10 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         tf.initialize_all_variables().run()
         for i in range(n_epoch):
-            training_batch = zip(range(0, len(X_train), batch_size),range(batch_size, len(X_train)+1, batch_size))
-            
+            training_batch = zip(range(0, train_size, batch_size),range(batch_size, train_size+1, batch_size))            
             for start, end in training_batch:
-                train_input_dict = {X: X_train[start:end], 
+                X_train = rd.get_melspectrograms_indexed(train_indices[start:end])
+                train_input_dict = {X: X_train, 
                                     y: y_train[start:end],
                                     lrate: learning_rate,
                                     phase_train: True}
