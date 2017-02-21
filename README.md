@@ -1,4 +1,8 @@
 # crnn-music-genre-classification
+
+[![arXiv Tag](https://img.shields.io/badge/arXiv-1609.04243-brightgreen.svg)](https://arxiv.org/abs/1609.04243)
+
+
 Music Genre Classification using Convolutional Recurrent Neural Networks
 
 ### Data 
